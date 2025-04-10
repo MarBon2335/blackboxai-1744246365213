@@ -6,6 +6,7 @@ const batteryPercentage = document.getElementById('batteryPercentage');
 const chargingStatus = document.getElementById('chargingStatus');
 const notificationStatus = document.getElementById('notificationStatus');
 const minBatteryLevel = document.getElementById('minBatteryLevel');
+const statusImage = document.getElementById('statusImage');
 
 // Configuration
 let notificationsEnabled = false;
@@ -14,7 +15,7 @@ const NOTIFICATION_COOLDOWN = 60000; // 1 minute cooldown between notifications
 
 // Battery icons based on level
 const batteryIcons = {
-    charging: 'fa-battery-bolt',
+    charging: 'fa-bolt',
     level100: 'fa-battery-full',
     level75: 'fa-battery-three-quarters',
     level50: 'fa-battery-half',
@@ -31,12 +32,24 @@ function updateBatteryIcon(level, isCharging) {
     if (isCharging) {
         icon.classList.add(batteryIcons.charging);
         icon.classList.add('animate-pulse');
+        icon.style.color = '#10B981'; // Green color for charging
     } else {
-        if (level >= 87.5) icon.classList.add(batteryIcons.level100);
-        else if (level >= 62.5) icon.classList.add(batteryIcons.level75);
-        else if (level >= 37.5) icon.classList.add(batteryIcons.level50);
-        else if (level >= 12.5) icon.classList.add(batteryIcons.level25);
-        else icon.classList.add(batteryIcons.level0);
+        if (level >= 87.5) {
+            icon.classList.add(batteryIcons.level100);
+            icon.style.color = '#10B981'; // Green
+        } else if (level >= 62.5) {
+            icon.classList.add(batteryIcons.level75);
+            icon.style.color = '#10B981'; // Green
+        } else if (level >= 37.5) {
+            icon.classList.add(batteryIcons.level50);
+            icon.style.color = '#FBBF24'; // Yellow
+        } else if (level >= 12.5) {
+            icon.classList.add(batteryIcons.level25);
+            icon.style.color = '#F59E0B'; // Orange
+        } else {
+            icon.classList.add(batteryIcons.level0);
+            icon.style.color = '#EF4444'; // Red
+        }
     }
     
     batteryIcon.appendChild(icon);
@@ -49,7 +62,7 @@ async function requestNotificationPermission() {
         notificationsEnabled = permission === 'granted';
         updateNotificationStatus();
     } catch (error) {
-        console.error('Error requesting notification permission:', error);
+        console.error('Error al solicitar permisos de notificación:', error);
         notificationsEnabled = false;
         updateNotificationStatus();
     }
@@ -66,12 +79,13 @@ function updateNotificationStatus() {
 }
 
 // Show notification
-function showNotification(title, body) {
+function showNotification(title, body, icon = 'fas fa-shield-alt') {
     const now = Date.now();
     if (notificationsEnabled && (now - lastNotificationTime) > NOTIFICATION_COOLDOWN) {
         new Notification(title, {
             body: body,
-            icon: '/favicon.ico'
+            icon: statusImage ? statusImage.src : null,
+            badge: '/favicon.ico'
         });
         lastNotificationTime = now;
     }
@@ -86,40 +100,50 @@ function updateBatteryUI(battery) {
     batteryPercentage.textContent = `${level}%`;
     batteryLevel.style.width = `${level}%`;
     
-    // Update charging status
-    chargingStatus.textContent = isCharging ? 'Cargando' : 'No cargando';
+    // Update charging status with icon
+    chargingStatus.innerHTML = isCharging 
+        ? '<i class="fas fa-plug text-green-600 mr-2"></i>Cargando'
+        : '<i class="fas fa-power-off text-gray-600 mr-2"></i>Desconectado';
     
     // Update battery icon
     updateBatteryIcon(level, isCharging);
     
-    // Update status message
+    // Update status message and color
     let statusMessage = `Nivel de batería: ${level}%`;
+    let statusColor = 'text-gray-600';
+    
     if (isCharging) {
-        statusMessage += ' - Cargando';
         if (level >= 100) {
-            statusMessage += ' - ¡Batería completa!';
+            statusMessage = '¡Batería completamente cargada!';
+            statusColor = 'text-green-600';
             showNotification(
-                '¡Batería Completa!',
+                '¡Carga Completa!',
                 'Tu dispositivo está completamente cargado. Puedes desconectarlo.'
             );
+        } else {
+            statusMessage += ' - Cargando...';
+            statusColor = 'text-blue-600';
         }
     } else if (level <= parseInt(minBatteryLevel.value)) {
-        statusMessage += ' - ¡Batería baja!';
+        statusMessage = `¡Atención! Batería baja (${level}%)`;
+        statusColor = 'text-red-600';
         showNotification(
             '¡Batería Baja!',
             `El nivel de batería ha llegado al ${level}%. Conecta tu dispositivo.`
         );
     }
-    batteryStatus.textContent = statusMessage;
     
-    // Update UI colors based on battery level
-    if (level <= parseInt(minBatteryLevel.value)) {
-        batteryLevel.classList.remove('bg-purple-600');
-        batteryLevel.classList.add('bg-red-600');
-    } else {
-        batteryLevel.classList.remove('bg-red-600');
-        batteryLevel.classList.add('bg-purple-600');
-    }
+    batteryStatus.textContent = statusMessage;
+    batteryStatus.className = `text-xl ${statusColor}`;
+    
+    // Update progress bar color
+    batteryLevel.className = `h-full transition-all duration-300 ${
+        isCharging ? 'bg-green-500' :
+        level <= parseInt(minBatteryLevel.value) ? 'bg-red-500' :
+        level <= 30 ? 'bg-orange-500' :
+        level <= 60 ? 'bg-yellow-500' :
+        'bg-green-500'
+    }`;
 }
 
 // Initialize battery monitoring
@@ -127,7 +151,7 @@ async function initBatteryMonitor() {
     try {
         // Check if Battery API is supported
         if (!('getBattery' in navigator)) {
-            throw new Error('Battery API no soportada en este navegador');
+            throw new Error('La API de Batería no está soportada en este navegador');
         }
         
         // Request notification permission
